@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { contact } from '@/lib/constants';
+import { contact, RUPEE } from '@/lib/constants';
 
 const BASE_URL = 'https://www.pkvgold.com';
 const OG_IMAGE = `${BASE_URL}/opengraph-image`;
@@ -81,7 +81,7 @@ const organizationSchema = {
   },
   hasMap: contact.mapsUrl,
   sameAs: ['https://www.instagram.com/pkvgold/'],
-  priceRange: '₹₹',
+  priceRange: `${RUPEE}${RUPEE}`,
 };
 
 const webSiteSchema = {

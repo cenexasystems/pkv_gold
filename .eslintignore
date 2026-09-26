@@ -3,4 +3,7 @@ next-env.d.ts
 .next-dev/
 node_modules/
 chrome-qa-profile*/
+chrome-qa*/
+chrome-wait*/
+.next-stale-*/
 screen-qa*.png

@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
-import { contact, purityOptions, buildMapEmbedUrl } from "@/lib/constants";
+import { contact, purityOptions, buildMapEmbedUrl, RUPEE } from "@/lib/constants";
 import { buildGeneralWhatsAppUrl } from "@/lib/whatsapp";
 import { calculateGoldValue, formatIndianRupees } from "@/lib/calculator";
 import { MediaPlaceholder } from "@/components/media/MediaPlaceholder";
@@ -88,56 +88,35 @@ function FinalCtaVideo() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [showSoundPrompt, setShowSoundPrompt] = useState(false);
-  const [isInView, setIsInView] = useState(false);
   const [volume, setVolume] = useState(1);
   const isInViewRef = useRef(false);
-  const soundPreferenceKey = "pkv-gold-video-sound";
+  const volumeRef = useRef(1);
 
   useEffect(() => {
     const video = videoRef.current;
     const frame = video?.closest(".final-cta-visual-frame");
     if (!video || !frame) return;
 
-    const rememberSoundPreference = (enabled: boolean) => {
-      try {
-        sessionStorage.setItem(soundPreferenceKey, enabled ? "on" : "off");
-      } catch {
-        // Storage may be unavailable in privacy-restricted browsers.
-      }
-    };
-
     const playWhenVisible = async () => {
+      video.volume = volumeRef.current;
       video.muted = false;
-      video.volume = 1;
 
       try {
         await video.play();
-        if (!isInViewRef.current) {
-          video.pause();
-          return;
-        }
-        setIsMuted(false);
-        setShowSoundPrompt(false);
-        rememberSoundPreference(true);
+        if (!isInViewRef.current) video.pause();
+        setIsMuted(video.muted);
       } catch (error) {
         const autoplayBlocked = error instanceof DOMException && error.name === "NotAllowedError";
-        if (!autoplayBlocked) {
+        if (!autoplayBlocked || !isInViewRef.current) {
           setIsPlaying(false);
           return;
         }
 
         video.muted = true;
-        video.volume = 1;
-
         try {
           await video.play();
-          if (!isInViewRef.current) {
-            video.pause();
-            return;
-          }
+          if (!isInViewRef.current) video.pause();
           setIsMuted(true);
-          setShowSoundPrompt(true);
         } catch {
           setIsPlaying(false);
         }
@@ -149,8 +128,6 @@ function FinalCtaVideo() {
       if (nextInView === isInViewRef.current) return;
 
       isInViewRef.current = nextInView;
-      setIsInView(nextInView);
-
       if (nextInView) {
         void playWhenVisible();
       } else {
@@ -159,37 +136,11 @@ function FinalCtaVideo() {
     }, { threshold: [0, 0.55] });
 
     observer.observe(frame);
-
     return () => {
       observer.disconnect();
       video.pause();
     };
   }, []);
-
-  const enableSound = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.muted = false;
-    const nextVolume = volume > 0 ? volume : 1;
-    video.volume = nextVolume;
-    setVolume(nextVolume);
-
-    try {
-      await video.play();
-      setIsMuted(false);
-      setShowSoundPrompt(false);
-      try {
-        sessionStorage.setItem(soundPreferenceKey, "on");
-      } catch {
-        // Storage may be unavailable in privacy-restricted browsers.
-      }
-    } catch {
-      video.muted = true;
-      setIsMuted(true);
-      setShowSoundPrompt(true);
-    }
-  };
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -204,20 +155,9 @@ function FinalCtaVideo() {
   const toggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
-
-    if (video.muted) {
-      void enableSound();
-      return;
-    }
-
-    video.muted = true;
-    setIsMuted(true);
-    setShowSoundPrompt(true);
-    try {
-      sessionStorage.setItem(soundPreferenceKey, "off");
-    } catch {
-      // Storage may be unavailable in privacy-restricted browsers.
-    }
+    video.muted = !video.muted;
+    if (!video.muted) video.volume = volumeRef.current;
+    setIsMuted(video.muted);
   };
 
   const updateVolume = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,23 +165,19 @@ function FinalCtaVideo() {
     const video = videoRef.current;
     if (!video) return;
 
+    volumeRef.current = nextVolume;
     video.volume = nextVolume;
+    if (nextVolume > 0) video.muted = false;
     setVolume(nextVolume);
+    setIsMuted(video.muted);
+  };
 
-    if (nextVolume > 0) {
-      video.muted = false;
-      setIsMuted(false);
-      setShowSoundPrompt(false);
-      try {
-        sessionStorage.setItem(soundPreferenceKey, "on");
-      } catch {
-        // Storage may be unavailable in privacy-restricted browsers.
-      }
-    } else {
-      video.muted = true;
-      setIsMuted(true);
-      setShowSoundPrompt(true);
-    }
+  const syncVideoState = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    volumeRef.current = video.volume;
+    setVolume(video.volume);
+    setIsMuted(video.muted);
   };
 
   return (
@@ -254,15 +190,10 @@ function FinalCtaVideo() {
         aria-label="PKV Gold video"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
+        onVolumeChange={syncVideoState}
       >
         <source src="/PKV%20GOLD%20.mp4" type="video/mp4" />
       </video>
-      <div className={`final-cta-sound-prompt${showSoundPrompt && isInView ? " is-visible" : ""}`}>
-        <button type="button" onClick={() => void enableSound()} aria-label="Tap for sound">
-          <span aria-hidden="true">&#128266;</span>
-          Tap for sound
-        </button>
-      </div>
       <div className="final-cta-video-controls" aria-label="Video controls">
         <button type="button" onClick={togglePlay} aria-label={isPlaying ? "Pause video" : "Play video"}>
           {isPlaying ? "\u275A\u275A" : "\u25B6"}
@@ -272,7 +203,7 @@ function FinalCtaVideo() {
         </button>
         <label>
           <span className="sr-only">Video volume</span>
-          <input type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume} onChange={updateVolume} aria-label="Video volume" />
+          <input type="range" min="0" max="1" step="0.05" value={volume} onChange={updateVolume} aria-label="Video volume" />
         </label>
       </div>
     </div>
@@ -580,13 +511,13 @@ function Calculator() {
       </label>
       <div className="calculator-rate">
         <span>Current {selected.karat}K Gold Rate</span>
-        <strong>{rate === null ? "—" : `₹${formatIndianRupees(rate)}`}</strong>
+        <strong>{rate === null ? "—" : `${RUPEE}${formatIndianRupees(rate)}`}</strong>
         <small>per gram</small>
       </div>
       <div className="calculator-value">
         <span>Your Gold Value</span>
         <strong>
-          {estimate === null ? "—" : `₹${formatIndianRupees(estimate)}`}
+          {estimate === null ? "—" : `${RUPEE}${formatIndianRupees(estimate)}`}
         </strong>
         <small>Based on current gold rate × your weight</small>
       </div>

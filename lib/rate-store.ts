@@ -28,7 +28,7 @@ export async function writeGoldRate(rates: GoldRates): Promise<GoldRate> {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
-      contentType: 'application/json',
+      contentType: 'application/json; charset=utf-8',
       cacheControlMaxAge: 0,
     });
     return next;

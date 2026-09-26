@@ -3,5 +3,5 @@ import { readGoldRate } from '@/lib/rate-store';
 
 export async function GET() {
   const { rates, updatedAt } = await readGoldRate();
-  return NextResponse.json({ rates, updatedAt }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ rates, updatedAt }, { headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' } });
 }

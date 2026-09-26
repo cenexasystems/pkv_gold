@@ -1,3 +1,5 @@
+export const RUPEE = '\u20B9';
+
 export const contactConfig = {
   businessName: 'PKV Gold',
   phone: '+919444528847',
