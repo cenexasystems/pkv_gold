@@ -88,25 +88,56 @@ function FinalCtaVideo() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(0.65);
+  const [showSoundPrompt, setShowSoundPrompt] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const [volume, setVolume] = useState(1);
   const isInViewRef = useRef(false);
+  const soundPreferenceKey = "pkv-gold-video-sound";
 
   useEffect(() => {
     const video = videoRef.current;
-    const frame = video?.closest('.final-cta-visual-frame');
+    const frame = video?.closest(".final-cta-visual-frame");
     if (!video || !frame) return;
 
+    const rememberSoundPreference = (enabled: boolean) => {
+      try {
+        sessionStorage.setItem(soundPreferenceKey, enabled ? "on" : "off");
+      } catch {
+        // Storage may be unavailable in privacy-restricted browsers.
+      }
+    };
+
     const playWhenVisible = async () => {
-      video.volume = volume;
       video.muted = false;
+      video.volume = 1;
+
       try {
         await video.play();
-        setIsMuted(video.muted);
-      } catch {
+        if (!isInViewRef.current) {
+          video.pause();
+          return;
+        }
+        setIsMuted(false);
+        setShowSoundPrompt(false);
+        rememberSoundPreference(true);
+      } catch (error) {
+        const autoplayBlocked = error instanceof DOMException && error.name === "NotAllowedError";
+        if (!autoplayBlocked) {
+          setIsPlaying(false);
+          return;
+        }
+
         video.muted = true;
+        video.volume = 1;
+
         try {
           await video.play();
+          if (!isInViewRef.current) {
+            video.pause();
+            return;
+          }
           setIsMuted(true);
+          setShowSoundPrompt(true);
         } catch {
           setIsPlaying(false);
         }
@@ -114,73 +145,130 @@ function FinalCtaVideo() {
     };
 
     const observer = new IntersectionObserver(([entry]) => {
-      const nextInView = entry.intersectionRatio >= 0.55;
+      const nextInView = entry.isIntersecting && entry.intersectionRatio >= 0.55;
       if (nextInView === isInViewRef.current) return;
+
       isInViewRef.current = nextInView;
+      setIsInView(nextInView);
 
       if (nextInView) {
         void playWhenVisible();
-      } else if (!video.paused) {
+      } else {
         video.pause();
       }
     }, { threshold: [0, 0.55] });
 
     observer.observe(frame);
-    return () => observer.disconnect();
-  }, [volume]);
+
+    return () => {
+      observer.disconnect();
+      video.pause();
+    };
+  }, []);
+
+  const enableSound = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = false;
+    const nextVolume = volume > 0 ? volume : 1;
+    video.volume = nextVolume;
+    setVolume(nextVolume);
+
+    try {
+      await video.play();
+      setIsMuted(false);
+      setShowSoundPrompt(false);
+      try {
+        sessionStorage.setItem(soundPreferenceKey, "on");
+      } catch {
+        // Storage may be unavailable in privacy-restricted browsers.
+      }
+    } catch {
+      video.muted = true;
+      setIsMuted(true);
+      setShowSoundPrompt(true);
+    }
+  };
 
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
       void video.play();
-      setIsPlaying(true);
     } else {
       video.pause();
-      setIsPlaying(false);
     }
   };
 
   const toggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
-    const nextMuted = !video.muted;
-    video.muted = nextMuted;
-    if (!nextMuted) video.volume = volume;
-    setIsMuted(nextMuted);
+
+    if (video.muted) {
+      void enableSound();
+      return;
+    }
+
+    video.muted = true;
+    setIsMuted(true);
+    setShowSoundPrompt(true);
+    try {
+      sessionStorage.setItem(soundPreferenceKey, "off");
+    } catch {
+      // Storage may be unavailable in privacy-restricted browsers.
+    }
   };
 
   const updateVolume = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextVolume = Number(event.target.value);
     const video = videoRef.current;
     if (!video) return;
+
     video.volume = nextVolume;
-    video.muted = nextVolume === 0;
     setVolume(nextVolume);
-    setIsMuted(nextVolume === 0);
+
+    if (nextVolume > 0) {
+      video.muted = false;
+      setIsMuted(false);
+      setShowSoundPrompt(false);
+      try {
+        sessionStorage.setItem(soundPreferenceKey, "on");
+      } catch {
+        // Storage may be unavailable in privacy-restricted browsers.
+      }
+    } else {
+      video.muted = true;
+      setIsMuted(true);
+      setShowSoundPrompt(true);
+    }
   };
 
   return (
     <div className="final-cta-video">
       <video
         ref={videoRef}
-        autoPlay
         loop
         playsInline
         preload="auto"
-        muted={false}
         aria-label="PKV Gold video"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       >
         <source src="/PKV%20GOLD%20.mp4" type="video/mp4" />
       </video>
+      <div className={`final-cta-sound-prompt${showSoundPrompt && isInView ? " is-visible" : ""}`}>
+        <button type="button" onClick={() => void enableSound()} aria-label="Tap for sound">
+          <span aria-hidden="true">&#128266;</span>
+          Tap for sound
+        </button>
+      </div>
       <div className="final-cta-video-controls" aria-label="Video controls">
         <button type="button" onClick={togglePlay} aria-label={isPlaying ? "Pause video" : "Play video"}>
-          {isPlaying ? "Ⅱ" : "▶"}
+          {isPlaying ? "\u275A\u275A" : "\u25B6"}
         </button>
         <button type="button" onClick={toggleMute} aria-label={isMuted ? "Turn sound on" : "Mute video"}>
-          {isMuted ? "🔇" : "🔊"}
+          {isMuted ? "\uD83D\uDD07" : "\uD83D\uDD0A"}
         </button>
         <label>
           <span className="sr-only">Video volume</span>
@@ -190,7 +278,6 @@ function FinalCtaVideo() {
     </div>
   );
 }
-
 function Arrow() {
   return <span aria-hidden="true">→</span>;
 }
